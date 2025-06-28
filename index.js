@@ -22,54 +22,75 @@ console.log(process.env.DISCORD_TOKEN);
 
 client.login(process.env.DISCORD_TOKEN);
 
-client.once("ready", () => {
-  console.log(`Logged in as ${client.user.tag}`);
-});
-
 // Register the slash command
 client.on("ready", async () => {
-  const commands = [
-    new SlashCommandBuilder()
-      .setName("trade")
-      .setDescription("Log a futures trade")
-      .addStringOption((opt) =>
-        opt
-          .setName("direction")
-          .setDescription("Long or Short")
-          .setRequired(true)
-          .addChoices(
-            { name: "Long", value: "long" },
-            { name: "Short", value: "short" }
-          )
-      ),
-  ].map((cmd) => cmd.toJSON());
+  console.log(`Logged in as ${client.user.tag}`);
 
-  console.log("2", commands);
+  try {
+    const rest = new REST({ version: "10" }).setToken(
+      process.env.DISCORD_TOKEN
+    );
 
-  const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
-  await rest.put(
-    Routes.applicationGuildCommands(
-      process.env.APPLICATION_ID,
-      process.env.SERVER_ID
-    ),
-    {
-      body: commands,
+    //clear global commands
+    //uncomment + run the code when we need to clear global level commands
+    // await rest.put(Routes.applicationCommands(process.env.APPLICATION_ID), {
+    //   body: [],
+    // });
+
+    //all servers
+    const servers = [process.env.SERVER_ID, process.env.SERVER_ID2];
+
+    // First clear existing guild level commands to remove cached commands
+    for (const serverId of servers) {
+      await rest.put(
+        Routes.applicationGuildCommands(process.env.APPLICATION_ID, serverId),
+        { body: [] }
+      );
     }
-  );
+
+    //register new commands
+    const commands = [
+      new SlashCommandBuilder()
+        .setName("trade")
+        .setDescription("Log a futures trade")
+        .addStringOption((opt) =>
+          opt
+            .setName("direction")
+            .setDescription("Long or Short")
+            .setRequired(true)
+            .addChoices(
+              { name: "Long", value: "long" },
+              { name: "Short", value: "short" }
+            )
+        ),
+    ].map((cmd) => cmd.toJSON());
+
+    console.log("2", commands);
+
+    //add the commands to each server
+    for (const serverId of servers) {
+      await rest.put(
+        Routes.applicationGuildCommands(process.env.APPLICATION_ID, serverId),
+        { body: commands }
+      );
+    }
+  } catch {
+    console.log("Something went wrong, please try again");
+  }
 });
 
 // // Slash command interaction
 client.on("interactionCreate", async (interaction) => {
   if (interaction.isChatInputCommand() && interaction.commandName === "trade") {
     const modal = new ModalBuilder()
-      .setCustomId("tradeModal")
+      .setCustomId(`tradeModal-${interaction.options.getString("direction")}`)
       .setTitle("Log Your Trade");
 
-    const direction = new TextInputBuilder()
-      .setCustomId("direction")
-      .setLabel("Direction (long/short)")
-      .setStyle(TextInputStyle.Short)
-      .setRequired(false);
+    // const direction = new TextInputBuilder()
+    //   .setCustomId("direction")
+    //   .setLabel("Direction (long/short)")
+    //   .setStyle(TextInputStyle.Short)
+    //   .setRequired(false);
 
     const entry = new TextInputBuilder()
       .setCustomId("entry")
@@ -96,7 +117,7 @@ client.on("interactionCreate", async (interaction) => {
       .setRequired(false);
 
     modal.addComponents(
-      new ActionRowBuilder().addComponents(direction),
+      // new ActionRowBuilder().addComponents(direction),
       new ActionRowBuilder().addComponents(entry),
       new ActionRowBuilder().addComponents(tp),
       new ActionRowBuilder().addComponents(sl),
@@ -106,9 +127,14 @@ client.on("interactionCreate", async (interaction) => {
     await interaction.showModal(modal);
   }
 
-  if (interaction.isModalSubmit() && interaction.customId === "tradeModal") {
-    const direction =
-      interaction.fields.getTextInputValue("direction") || "N/A";
+  if (
+    interaction.isModalSubmit() &&
+    interaction.customId.startsWith("tradeModal-")
+  ) {
+    // const direction =
+    //   interaction.fields.getTextInputValue("direction") || "N/A";
+
+    const direction = interaction.customId.split("-")[1];
 
     const entry = interaction.fields.getTextInputValue("entry") || "N/A";
 
@@ -119,7 +145,14 @@ client.on("interactionCreate", async (interaction) => {
     const notes = interaction.fields.getTextInputValue("notes") || "N/A";
 
     await interaction.reply({
-      content: `New Trade Submitted by ${interaction.user.username}\nDirection: ${direction}\nEntry: ${entry}\nTarget: ${tp}\nStop Loss: ${sl}\nNotes: ${notes}`,
+      content: `<@&${process.env.ROLE_ID}>\nNew Trade Submitted by ${
+        interaction.user.username
+      }\n\n${direction === "long" ? "📈" : "📉"} Direction: ${
+        direction[0].toUpperCase() + direction.slice(1)
+      }\n\n📊 Entry: ${entry}\n\n🎯 Target: ${tp}\n\n🛑 Stop Loss: ${sl}\n\n📝 Notes: ${notes}`,
+      allowedMentions: {
+        roles: [process.env.ROLE_ID],
+      },
     });
   }
 });
