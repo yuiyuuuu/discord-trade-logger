@@ -1,0 +1,19 @@
+services:
+  - type: worker
+    name: discord-trade-bot
+    runtime: node
+    repo: https://github.com/YOUR_USERNAME/YOUR_REPO_NAME
+    branch: main
+    buildCommand: "npm install"
+    startCommand: "npm start"
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: APPLICATION_ID
+        sync: false
+      - key: SERVER_ID
+        sync: false
+      - key: SERVER_ID2
+        sync: false
+      - key: ROLE_ID
+        sync: false
